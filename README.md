@@ -1,6 +1,5 @@
 # UGDissertation
-Files used for my dissertation project.
-These are the CSV files used for the data analysis section of my Undergraduate Dissertation.
+This repository is to store files used for my Undergraduate Dissertation.
 
 The main data used for analysis is labelled "Analysis Data.csv" above, used to create the regression models and the main findings of my dissertation. It is collected from US Census Bureau's Household Pulse Survey Public Use Files, which can be found at: https://www.census.gov/programs-surveys/household-pulse-survey/datasets.html. The surveys used for this dissertation is week 18 to week 24, from 28th Oct 2020 to 15th Feb 2021. 
 
