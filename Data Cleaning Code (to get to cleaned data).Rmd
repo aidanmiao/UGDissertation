@@ -1,0 +1,745 @@
+---
+title: "Dissertation Analysis Code"
+output: html_document
+---
+loading the lockdown stringency data
+```{r}
+#the dataset for US lockdown stringency measures 
+data.US <- read.csv("OxCGRT_US_latest.csv")
+#subset it to include only the first 29 columns (only data on containment and closure policies)
+data.US <- data.US[,1:29]
+#keep column 1 to 6 and C1, C2, C4, and C6 
+data.US <- data.US[c(1:6, 7, 10, 22)]
+#keep observations where jurisdiction is STATE_WIDE
+state.measures <- data.US[which(data.US$Jurisdiction=='STATE_WIDE'),]
+names(state.measures)[names(state.measures) == "RegionName"] <- "state"
+#the US state covid cases data
+covid.cases <- read.csv("us-states.csv")
+```
+
+now let's sort the survey data, the dependent variables of interests are: DOWN, INTEREST, WORRY, ANXIOUS. 
+the independent variables we care about: INCOME, ANYWORK, EEDUC, RHISPANIC, RRACE, EGENDER, TBIRTH_YEAR, EST_ST, week, SCRAM, 
+```{r}
+#the dataset from the surveys and remember to repeat this code for all data from 8 time points
+survey.data.19 <- read.csv("HPS PUF/HPS_Week19_PUF_CSV/pulse2020_puf_19.csv")
+#create a variable for respondents' age
+survey.data.19$age <- 2020-survey.data.19$TBIRTH_YEAR
+
+#we select the variables we care about 
+vars <- c("SCRAM","WEEK","PWEIGHT","DOWN","ANXIOUS","INCOME", "ANYWORK","EEDUC","RHISPANIC", "RRACE","EGENDER", "age", "EST_ST", "TW_START", "THHLD_NUMKID")
+survey.data.19 <- survey.data.19[vars]
+```
+
+now add the policy stringency measures to the week 19 survey data (november 11 to november 23)
+```{r}
+#first, rename survey data's state names into actual state names for further coding convenience 
+survey.data.19$state <- survey.data.19$EST_ST
+survey.data.19$state[survey.data.19$state == 1] <- "Alabama"
+survey.data.19$state[survey.data.19$state == 2] <- "Alaska"
+survey.data.19$state[survey.data.19$state == 4] <- "Arizona"
+survey.data.19$state[survey.data.19$state == 5] <- "Arkansas"
+survey.data.19$state[survey.data.19$state == 6] <- "California"
+survey.data.19$state[survey.data.19$state == 8] <- "Colorado"
+survey.data.19$state[survey.data.19$state == 9] <- "Connecticut"
+survey.data.19$state[survey.data.19$state == 10] <- "Delaware"
+survey.data.19$state[survey.data.19$state == 11] <- "Washington DC"
+survey.data.19$state[survey.data.19$state == 12] <- "Florida"
+survey.data.19$state[survey.data.19$state == 13] <- "Georgia"
+survey.data.19$state[survey.data.19$state == 15] <- "Hawaii"
+survey.data.19$state[survey.data.19$state == 16] <- "Idaho"
+survey.data.19$state[survey.data.19$state == 17] <- "Illinois"
+survey.data.19$state[survey.data.19$state == 18] <- "Indiana"
+survey.data.19$state[survey.data.19$state == 19] <- "Iowa"
+survey.data.19$state[survey.data.19$state == 20] <- "Kansas"
+survey.data.19$state[survey.data.19$state == 21] <- "Kentucky"
+survey.data.19$state[survey.data.19$state == 22] <- "Louisiana"
+survey.data.19$state[survey.data.19$state == 23] <- "Maine"
+survey.data.19$state[survey.data.19$state == 24] <- "Maryland"
+survey.data.19$state[survey.data.19$state == 25] <- "Massachusetts"
+survey.data.19$state[survey.data.19$state == 26] <- "Michigan"
+survey.data.19$state[survey.data.19$state == 27] <- "Minnesota"
+survey.data.19$state[survey.data.19$state == 28] <- "Mississippi"
+survey.data.19$state[survey.data.19$state == 29] <- "Missouri"
+survey.data.19$state[survey.data.19$state == 30] <- "Montana"
+survey.data.19$state[survey.data.19$state == 31] <- "Nebraska"
+survey.data.19$state[survey.data.19$state == 32] <- "Nevada"
+survey.data.19$state[survey.data.19$state == 33] <- "New Hampshire"
+survey.data.19$state[survey.data.19$state == 34] <- "New Jersey"
+survey.data.19$state[survey.data.19$state == 35] <- "New Mexico"
+survey.data.19$state[survey.data.19$state == 36] <- "New York"
+survey.data.19$state[survey.data.19$state == 37] <- "North Carolina"
+survey.data.19$state[survey.data.19$state == 38] <- "North Dakota"
+survey.data.19$state[survey.data.19$state == 39] <- "Ohio"
+survey.data.19$state[survey.data.19$state == 40] <- "Oklahoma"
+survey.data.19$state[survey.data.19$state == 41] <- "Oregon"
+survey.data.19$state[survey.data.19$state == 42] <- "Pennsylvania"
+survey.data.19$state[survey.data.19$state == 44] <- "Rhode Island"
+survey.data.19$state[survey.data.19$state == 45] <- "South Carolina"
+survey.data.19$state[survey.data.19$state == 46] <- "South Dakota"
+survey.data.19$state[survey.data.19$state == 47] <- "Tennessee"
+survey.data.19$state[survey.data.19$state == 48] <- "Texas"
+survey.data.19$state[survey.data.19$state == 49] <- "Utah"
+survey.data.19$state[survey.data.19$state == 50] <- "Vermont"
+survey.data.19$state[survey.data.19$state == 51] <- "Virginia"
+survey.data.19$state[survey.data.19$state == 53] <- "Washington"
+survey.data.19$state[survey.data.19$state == 54] <- "West Virginia"
+survey.data.19$state[survey.data.19$state == 55] <- "Wisconsin"
+survey.data.19$state[survey.data.19$state == 56] <- "Wyoming"
+
+#now find the measures for each state, C1, C2, C4, and C6 on Nov 11 2020, the start date when the surveys are being distributed
+statepolicy.19 <- subset(state.measures, state.measures$Date == 20201111)
+statepolicy.19 <- statepolicy.19[c(-1,-2,-4,-5)]
+
+#now add the new covid cases and deaths on the beginning of the survey period, 11 Nov 2020
+covid.cases.19 <- subset(covid.cases, covid.cases$date == "2020-11-10" | covid.cases$date == "2020-11-11")
+#get rid of Guam, Northern Marina Islands, Puerto Rico, Virgin Islands
+covid.cases.19 <- subset(covid.cases.19, covid.cases.19$state != "Guam" & covid.cases.19$state !="Northern Mariana Islands" & covid.cases.19$state != "Puerto Rico" & covid.cases.19$state != "Virgin Islands")
+#create a vector object (with 51 values) for the difference in cases and difference in deaths 
+new.cases.19 <- covid.cases.19$cases[covid.cases.19$date == "2020-11-11"] - covid.cases.19$cases[covid.cases.19$date == "2020-11-10"]
+new.deaths.19 <- covid.cases.19$deaths[covid.cases.19$date == "2020-11-11"] - covid.cases.19$deaths[covid.cases.19$date == "2020-11-10"]
+
+#now add these two vectors to the state.policy.19 dataframe
+statepolicy.19$new.cases <- new.cases.19
+statepolicy.19$new.deaths <- new.deaths.19
+
+#now merge the state level dataframe with the survey data
+week.19 <- merge(survey.data.19, statepolicy.19, by = "state")
+```
+now that we have data for week 19, let's repeat this for week 18, 20, 21, 22, 23, and 24
+
+week 18:
+```{r}
+#the dataset from the surveys and remember to repeat this code for all data from 8 time points
+survey.data.18 <- read.csv("HPS PUF/HPS_Week18_PUF_CSV/pulse2020_puf_18.csv")
+#create a variable for respondents' age
+survey.data.18$age <- 2020-survey.data.18$TBIRTH_YEAR
+
+#we select the variables we care about 
+survey.data.18 <- survey.data.18[vars]
+```
+
+now add the policy stringency measures to the week 18 survey data (Oct 28 to november 09)
+```{r}
+#first, rename survey data's state names into actual state names for further coding convenience 
+survey.data.18$state <- survey.data.18$EST_ST
+survey.data.18$state[survey.data.18$state == 1] <- "Alabama"
+survey.data.18$state[survey.data.18$state == 2] <- "Alaska"
+survey.data.18$state[survey.data.18$state == 4] <- "Arizona"
+survey.data.18$state[survey.data.18$state == 5] <- "Arkansas"
+survey.data.18$state[survey.data.18$state == 6] <- "California"
+survey.data.18$state[survey.data.18$state == 8] <- "Colorado"
+survey.data.18$state[survey.data.18$state == 9] <- "Connecticut"
+survey.data.18$state[survey.data.18$state == 10] <- "Delaware"
+survey.data.18$state[survey.data.18$state == 11] <- "Washington DC"
+survey.data.18$state[survey.data.18$state == 12] <- "Florida"
+survey.data.18$state[survey.data.18$state == 13] <- "Georgia"
+survey.data.18$state[survey.data.18$state == 15] <- "Hawaii"
+survey.data.18$state[survey.data.18$state == 16] <- "Idaho"
+survey.data.18$state[survey.data.18$state == 17] <- "Illinois"
+survey.data.18$state[survey.data.18$state == 18] <- "Indiana"
+survey.data.18$state[survey.data.18$state == 19] <- "Iowa"
+survey.data.18$state[survey.data.18$state == 20] <- "Kansas"
+survey.data.18$state[survey.data.18$state == 21] <- "Kentucky"
+survey.data.18$state[survey.data.18$state == 22] <- "Louisiana"
+survey.data.18$state[survey.data.18$state == 23] <- "Maine"
+survey.data.18$state[survey.data.18$state == 24] <- "Maryland"
+survey.data.18$state[survey.data.18$state == 25] <- "Massachusetts"
+survey.data.18$state[survey.data.18$state == 26] <- "Michigan"
+survey.data.18$state[survey.data.18$state == 27] <- "Minnesota"
+survey.data.18$state[survey.data.18$state == 28] <- "Mississippi"
+survey.data.18$state[survey.data.18$state == 29] <- "Missouri"
+survey.data.18$state[survey.data.18$state == 30] <- "Montana"
+survey.data.18$state[survey.data.18$state == 31] <- "Nebraska"
+survey.data.18$state[survey.data.18$state == 32] <- "Nevada"
+survey.data.18$state[survey.data.18$state == 33] <- "New Hampshire"
+survey.data.18$state[survey.data.18$state == 34] <- "New Jersey"
+survey.data.18$state[survey.data.18$state == 35] <- "New Mexico"
+survey.data.18$state[survey.data.18$state == 36] <- "New York"
+survey.data.18$state[survey.data.18$state == 37] <- "North Carolina"
+survey.data.18$state[survey.data.18$state == 38] <- "North Dakota"
+survey.data.18$state[survey.data.18$state == 39] <- "Ohio"
+survey.data.18$state[survey.data.18$state == 40] <- "Oklahoma"
+survey.data.18$state[survey.data.18$state == 41] <- "Oregon"
+survey.data.18$state[survey.data.18$state == 42] <- "Pennsylvania"
+survey.data.18$state[survey.data.18$state == 44] <- "Rhode Island"
+survey.data.18$state[survey.data.18$state == 45] <- "South Carolina"
+survey.data.18$state[survey.data.18$state == 46] <- "South Dakota"
+survey.data.18$state[survey.data.18$state == 47] <- "Tennessee"
+survey.data.18$state[survey.data.18$state == 48] <- "Texas"
+survey.data.18$state[survey.data.18$state == 49] <- "Utah"
+survey.data.18$state[survey.data.18$state == 50] <- "Vermont"
+survey.data.18$state[survey.data.18$state == 51] <- "Virginia"
+survey.data.18$state[survey.data.18$state == 53] <- "Washington"
+survey.data.18$state[survey.data.18$state == 54] <- "West Virginia"
+survey.data.18$state[survey.data.18$state == 55] <- "Wisconsin"
+survey.data.18$state[survey.data.18$state == 56] <- "Wyoming"
+
+#now find the measures for each state, C1, C2, C4, and C6 on Oct 28 2020, the start date when the surveys are being distributed
+statepolicy.18 <- subset(state.measures, state.measures$Date == 20201028)
+statepolicy.18 <- statepolicy.18[c(-1,-2,-4,-5)]
+
+#now add the new covid cases and deaths on the beginning of the survey period, 28 Oct 2020
+covid.cases.18 <- subset(covid.cases, covid.cases$date == "2020-10-27" | covid.cases$date == "2020-10-28")
+#get rid of Guam, Northern Marina Islands, Puerto Rico, Virgin Islands
+covid.cases.18 <- subset(covid.cases.18, covid.cases.18$state != "Guam" & covid.cases.18$state !="Northern Mariana Islands" & covid.cases.18$state != "Puerto Rico" & covid.cases.18$state != "Virgin Islands")
+#create a vector object (with 51 values) for the difference in cases and difference in deaths 
+new.cases.18 <- covid.cases.18$cases[covid.cases.18$date == "2020-10-28"] - covid.cases.18$cases[covid.cases.18$date == "2020-10-27"]
+new.deaths.18 <- covid.cases.18$deaths[covid.cases.18$date == "2020-10-28"] - covid.cases.18$deaths[covid.cases.18$date == "2020-10-27"]
+
+#now add these two vectors to the state.policy.18 dataframe
+statepolicy.18$new.cases <- new.cases.18
+statepolicy.18$new.deaths <- new.deaths.18
+
+#now merge the state level dataframe with the survey data
+week.18 <- merge(survey.data.18, statepolicy.18, by = "state")
+```
+
+week 20:
+```{r}
+#the dataset from the surveys and remember to repeat this code for all data from 8 time points
+survey.data.20 <- read.csv("HPS PUF/HPS_Week20_PUF_CSV/pulse2020_puf_20.csv")
+#create a variable for respondents' age
+survey.data.20$age <- 2020-survey.data.20$TBIRTH_YEAR
+
+#we select the variables we care about 
+survey.data.20 <- survey.data.20[vars]
+```
+
+now add the policy stringency measures to the week 20 survey data (november 25 to december 07)
+```{r}
+#first, rename survey data's state names into actual state names for further coding convenience 
+survey.data.20$state <- survey.data.20$EST_ST
+survey.data.20$state[survey.data.20$state == 1] <- "Alabama"
+survey.data.20$state[survey.data.20$state == 2] <- "Alaska"
+survey.data.20$state[survey.data.20$state == 4] <- "Arizona"
+survey.data.20$state[survey.data.20$state == 5] <- "Arkansas"
+survey.data.20$state[survey.data.20$state == 6] <- "California"
+survey.data.20$state[survey.data.20$state == 8] <- "Colorado"
+survey.data.20$state[survey.data.20$state == 9] <- "Connecticut"
+survey.data.20$state[survey.data.20$state == 10] <- "Delaware"
+survey.data.20$state[survey.data.20$state == 11] <- "Washington DC"
+survey.data.20$state[survey.data.20$state == 12] <- "Florida"
+survey.data.20$state[survey.data.20$state == 13] <- "Georgia"
+survey.data.20$state[survey.data.20$state == 15] <- "Hawaii"
+survey.data.20$state[survey.data.20$state == 16] <- "Idaho"
+survey.data.20$state[survey.data.20$state == 17] <- "Illinois"
+survey.data.20$state[survey.data.20$state == 18] <- "Indiana"
+survey.data.20$state[survey.data.20$state == 19] <- "Iowa"
+survey.data.20$state[survey.data.20$state == 20] <- "Kansas"
+survey.data.20$state[survey.data.20$state == 21] <- "Kentucky"
+survey.data.20$state[survey.data.20$state == 22] <- "Louisiana"
+survey.data.20$state[survey.data.20$state == 23] <- "Maine"
+survey.data.20$state[survey.data.20$state == 24] <- "Maryland"
+survey.data.20$state[survey.data.20$state == 25] <- "Massachusetts"
+survey.data.20$state[survey.data.20$state == 26] <- "Michigan"
+survey.data.20$state[survey.data.20$state == 27] <- "Minnesota"
+survey.data.20$state[survey.data.20$state == 28] <- "Mississippi"
+survey.data.20$state[survey.data.20$state == 29] <- "Missouri"
+survey.data.20$state[survey.data.20$state == 30] <- "Montana"
+survey.data.20$state[survey.data.20$state == 31] <- "Nebraska"
+survey.data.20$state[survey.data.20$state == 32] <- "Nevada"
+survey.data.20$state[survey.data.20$state == 33] <- "New Hampshire"
+survey.data.20$state[survey.data.20$state == 34] <- "New Jersey"
+survey.data.20$state[survey.data.20$state == 35] <- "New Mexico"
+survey.data.20$state[survey.data.20$state == 36] <- "New York"
+survey.data.20$state[survey.data.20$state == 37] <- "North Carolina"
+survey.data.20$state[survey.data.20$state == 38] <- "North Dakota"
+survey.data.20$state[survey.data.20$state == 39] <- "Ohio"
+survey.data.20$state[survey.data.20$state == 40] <- "Oklahoma"
+survey.data.20$state[survey.data.20$state == 41] <- "Oregon"
+survey.data.20$state[survey.data.20$state == 42] <- "Pennsylvania"
+survey.data.20$state[survey.data.20$state == 44] <- "Rhode Island"
+survey.data.20$state[survey.data.20$state == 45] <- "South Carolina"
+survey.data.20$state[survey.data.20$state == 46] <- "South Dakota"
+survey.data.20$state[survey.data.20$state == 47] <- "Tennessee"
+survey.data.20$state[survey.data.20$state == 48] <- "Texas"
+survey.data.20$state[survey.data.20$state == 49] <- "Utah"
+survey.data.20$state[survey.data.20$state == 50] <- "Vermont"
+survey.data.20$state[survey.data.20$state == 51] <- "Virginia"
+survey.data.20$state[survey.data.20$state == 53] <- "Washington"
+survey.data.20$state[survey.data.20$state == 54] <- "West Virginia"
+survey.data.20$state[survey.data.20$state == 55] <- "Wisconsin"
+survey.data.20$state[survey.data.20$state == 56] <- "Wyoming"
+
+#now find the measures for each state, C1, C2, C4, and C6 on Nov 25 2020, the start date when the surveys are being distributed
+statepolicy.20 <- subset(state.measures, state.measures$Date == 20201125)
+statepolicy.20 <- statepolicy.20[c(-1,-2,-4,-5)]
+
+#now add the new covid cases and deaths on the beginning of the survey period, 25 Nov 2020
+covid.cases.20 <- subset(covid.cases, covid.cases$date == "2020-11-24" | covid.cases$date == "2020-11-25")
+#get rid of Guam, Northern Marina Islands, Puerto Rico, Virgin Islands
+covid.cases.20 <- subset(covid.cases.20, covid.cases.20$state != "Guam" & covid.cases.20$state !="Northern Mariana Islands" & covid.cases.20$state != "Puerto Rico" & covid.cases.20$state != "Virgin Islands")
+#create a vector object (with 51 values) for the difference in cases and difference in deaths 
+new.cases.20 <- covid.cases.20$cases[covid.cases.20$date == "2020-11-25"] - covid.cases.20$cases[covid.cases.20$date == "2020-11-24"]
+new.deaths.20 <- covid.cases.20$deaths[covid.cases.20$date == "2020-11-25"] - covid.cases.20$deaths[covid.cases.20$date == "2020-11-24"]
+
+#now add these two vectors to the state.policy.20 dataframe
+statepolicy.20$new.cases <- new.cases.20
+statepolicy.20$new.deaths <- new.deaths.20
+
+#now merge the state level dataframe with the survey data
+week.20 <- merge(survey.data.20, statepolicy.20, by = "state")
+```
+
+week 21:
+```{r}
+#the dataset from the surveys and remember to repeat this code for all data from 8 time points
+survey.data.21 <- read.csv("HPS PUF/HPS_Week21_PUF_CSV/pulse2020_puf_21.csv")
+#create a variable for respondents' age
+survey.data.21$age <- 2020-survey.data.21$TBIRTH_YEAR
+
+#we select the variables we care about 
+survey.data.21 <- survey.data.21[vars]
+```
+
+now add the policy stringency measures to the week 21 survey data (dec 9 to dec 21)
+```{r}
+#first, rename survey data's state names into actual state names for further coding convenience 
+survey.data.21$state <- survey.data.21$EST_ST
+survey.data.21$state[survey.data.21$state == 1] <- "Alabama"
+survey.data.21$state[survey.data.21$state == 2] <- "Alaska"
+survey.data.21$state[survey.data.21$state == 4] <- "Arizona"
+survey.data.21$state[survey.data.21$state == 5] <- "Arkansas"
+survey.data.21$state[survey.data.21$state == 6] <- "California"
+survey.data.21$state[survey.data.21$state == 8] <- "Colorado"
+survey.data.21$state[survey.data.21$state == 9] <- "Connecticut"
+survey.data.21$state[survey.data.21$state == 10] <- "Delaware"
+survey.data.21$state[survey.data.21$state == 11] <- "Washington DC"
+survey.data.21$state[survey.data.21$state == 12] <- "Florida"
+survey.data.21$state[survey.data.21$state == 13] <- "Georgia"
+survey.data.21$state[survey.data.21$state == 15] <- "Hawaii"
+survey.data.21$state[survey.data.21$state == 16] <- "Idaho"
+survey.data.21$state[survey.data.21$state == 17] <- "Illinois"
+survey.data.21$state[survey.data.21$state == 18] <- "Indiana"
+survey.data.21$state[survey.data.21$state == 19] <- "Iowa"
+survey.data.21$state[survey.data.21$state == 20] <- "Kansas"
+survey.data.21$state[survey.data.21$state == 21] <- "Kentucky"
+survey.data.21$state[survey.data.21$state == 22] <- "Louisiana"
+survey.data.21$state[survey.data.21$state == 23] <- "Maine"
+survey.data.21$state[survey.data.21$state == 24] <- "Maryland"
+survey.data.21$state[survey.data.21$state == 25] <- "Massachusetts"
+survey.data.21$state[survey.data.21$state == 26] <- "Michigan"
+survey.data.21$state[survey.data.21$state == 27] <- "Minnesota"
+survey.data.21$state[survey.data.21$state == 28] <- "Mississippi"
+survey.data.21$state[survey.data.21$state == 29] <- "Missouri"
+survey.data.21$state[survey.data.21$state == 30] <- "Montana"
+survey.data.21$state[survey.data.21$state == 31] <- "Nebraska"
+survey.data.21$state[survey.data.21$state == 32] <- "Nevada"
+survey.data.21$state[survey.data.21$state == 33] <- "New Hampshire"
+survey.data.21$state[survey.data.21$state == 34] <- "New Jersey"
+survey.data.21$state[survey.data.21$state == 35] <- "New Mexico"
+survey.data.21$state[survey.data.21$state == 36] <- "New York"
+survey.data.21$state[survey.data.21$state == 37] <- "North Carolina"
+survey.data.21$state[survey.data.21$state == 38] <- "North Dakota"
+survey.data.21$state[survey.data.21$state == 39] <- "Ohio"
+survey.data.21$state[survey.data.21$state == 40] <- "Oklahoma"
+survey.data.21$state[survey.data.21$state == 41] <- "Oregon"
+survey.data.21$state[survey.data.21$state == 42] <- "Pennsylvania"
+survey.data.21$state[survey.data.21$state == 44] <- "Rhode Island"
+survey.data.21$state[survey.data.21$state == 45] <- "South Carolina"
+survey.data.21$state[survey.data.21$state == 46] <- "South Dakota"
+survey.data.21$state[survey.data.21$state == 47] <- "Tennessee"
+survey.data.21$state[survey.data.21$state == 48] <- "Texas"
+survey.data.21$state[survey.data.21$state == 49] <- "Utah"
+survey.data.21$state[survey.data.21$state == 50] <- "Vermont"
+survey.data.21$state[survey.data.21$state == 51] <- "Virginia"
+survey.data.21$state[survey.data.21$state == 53] <- "Washington"
+survey.data.21$state[survey.data.21$state == 54] <- "West Virginia"
+survey.data.21$state[survey.data.21$state == 55] <- "Wisconsin"
+survey.data.21$state[survey.data.21$state == 56] <- "Wyoming"
+
+#now find the measures for each state, C1, C2, C4, and C6 on Dec 9 2020, the start date when the surveys are being distributed
+statepolicy.21 <- subset(state.measures, state.measures$Date == 20201209)
+statepolicy.21 <- statepolicy.21[c(-1,-2,-4,-5)]
+
+#now add the new covid cases and deaths on the beginning of the survey period, 09 Dec 2020
+covid.cases.21 <- subset(covid.cases, covid.cases$date == "2020-12-08" | covid.cases$date == "2020-12-09")
+#get rid of Guam, Northern Marina Islands, Puerto Rico, Virgin Islands
+covid.cases.21 <- subset(covid.cases.21, covid.cases.21$state != "Guam" & covid.cases.21$state !="Northern Mariana Islands" & covid.cases.21$state != "Puerto Rico" & covid.cases.21$state != "Virgin Islands")
+#create a vector object (with 51 values) for the difference in cases and difference in deaths 
+new.cases.21 <- covid.cases.21$cases[covid.cases.21$date == "2020-12-09"] - covid.cases.21$cases[covid.cases.21$date == "2020-12-08"]
+new.deaths.21 <- covid.cases.21$deaths[covid.cases.21$date == "2020-12-09"] - covid.cases.21$deaths[covid.cases.21$date == "2020-12-08"]
+
+#now add these two vectors to the state.policy.21 dataframe
+statepolicy.21$new.cases <- new.cases.21
+statepolicy.21$new.deaths <- new.deaths.21
+
+#now merge the state level dataframe with the survey data
+week.21 <- merge(survey.data.21, statepolicy.21, by = "state")
+```
+
+week 22:
+```{r}
+#the dataset from the surveys and remember to repeat this code for all data from 8 time points
+survey.data.22 <- read.csv("HPS PUF/HPS_Week22_PUF_CSV/pulse2021_puf_22.csv")
+#create a variable for respondents' age
+survey.data.22$age <- 2021-survey.data.22$TBIRTH_YEAR
+
+#we select the variables we care about 
+survey.data.22 <- survey.data.22[vars]
+```
+
+now add the policy stringency measures to the week 22 survey data (2021 jan 6 - jan 18)
+```{r}
+#first, rename survey data's state names into actual state names for further coding convenience 
+survey.data.22$state <- survey.data.22$EST_ST
+survey.data.22$state[survey.data.22$state == 1] <- "Alabama"
+survey.data.22$state[survey.data.22$state == 2] <- "Alaska"
+survey.data.22$state[survey.data.22$state == 4] <- "Arizona"
+survey.data.22$state[survey.data.22$state == 5] <- "Arkansas"
+survey.data.22$state[survey.data.22$state == 6] <- "California"
+survey.data.22$state[survey.data.22$state == 8] <- "Colorado"
+survey.data.22$state[survey.data.22$state == 9] <- "Connecticut"
+survey.data.22$state[survey.data.22$state == 10] <- "Delaware"
+survey.data.22$state[survey.data.22$state == 11] <- "Washington DC"
+survey.data.22$state[survey.data.22$state == 12] <- "Florida"
+survey.data.22$state[survey.data.22$state == 13] <- "Georgia"
+survey.data.22$state[survey.data.22$state == 15] <- "Hawaii"
+survey.data.22$state[survey.data.22$state == 16] <- "Idaho"
+survey.data.22$state[survey.data.22$state == 17] <- "Illinois"
+survey.data.22$state[survey.data.22$state == 18] <- "Indiana"
+survey.data.22$state[survey.data.22$state == 19] <- "Iowa"
+survey.data.22$state[survey.data.22$state == 20] <- "Kansas"
+survey.data.22$state[survey.data.22$state == 21] <- "Kentucky"
+survey.data.22$state[survey.data.22$state == 22] <- "Louisiana"
+survey.data.22$state[survey.data.22$state == 23] <- "Maine"
+survey.data.22$state[survey.data.22$state == 24] <- "Maryland"
+survey.data.22$state[survey.data.22$state == 25] <- "Massachusetts"
+survey.data.22$state[survey.data.22$state == 26] <- "Michigan"
+survey.data.22$state[survey.data.22$state == 27] <- "Minnesota"
+survey.data.22$state[survey.data.22$state == 28] <- "Mississippi"
+survey.data.22$state[survey.data.22$state == 29] <- "Missouri"
+survey.data.22$state[survey.data.22$state == 30] <- "Montana"
+survey.data.22$state[survey.data.22$state == 31] <- "Nebraska"
+survey.data.22$state[survey.data.22$state == 32] <- "Nevada"
+survey.data.22$state[survey.data.22$state == 33] <- "New Hampshire"
+survey.data.22$state[survey.data.22$state == 34] <- "New Jersey"
+survey.data.22$state[survey.data.22$state == 35] <- "New Mexico"
+survey.data.22$state[survey.data.22$state == 36] <- "New York"
+survey.data.22$state[survey.data.22$state == 37] <- "North Carolina"
+survey.data.22$state[survey.data.22$state == 38] <- "North Dakota"
+survey.data.22$state[survey.data.22$state == 39] <- "Ohio"
+survey.data.22$state[survey.data.22$state == 40] <- "Oklahoma"
+survey.data.22$state[survey.data.22$state == 41] <- "Oregon"
+survey.data.22$state[survey.data.22$state == 42] <- "Pennsylvania"
+survey.data.22$state[survey.data.22$state == 44] <- "Rhode Island"
+survey.data.22$state[survey.data.22$state == 45] <- "South Carolina"
+survey.data.22$state[survey.data.22$state == 46] <- "South Dakota"
+survey.data.22$state[survey.data.22$state == 47] <- "Tennessee"
+survey.data.22$state[survey.data.22$state == 48] <- "Texas"
+survey.data.22$state[survey.data.22$state == 49] <- "Utah"
+survey.data.22$state[survey.data.22$state == 50] <- "Vermont"
+survey.data.22$state[survey.data.22$state == 51] <- "Virginia"
+survey.data.22$state[survey.data.22$state == 53] <- "Washington"
+survey.data.22$state[survey.data.22$state == 54] <- "West Virginia"
+survey.data.22$state[survey.data.22$state == 55] <- "Wisconsin"
+survey.data.22$state[survey.data.22$state == 56] <- "Wyoming"
+
+#now find the measures for each state, C1, C2, C4, and C6 on Jan 6 2021, the start date when the surveys are being distributed
+statepolicy.22 <- subset(state.measures, state.measures$Date == 20210106)
+statepolicy.22 <- statepolicy.22[c(-1,-2,-4,-5)]
+
+#now add the new covid cases and deaths on the beginning of the survey period, 6 Jan 2021
+covid.cases.22 <- subset(covid.cases, covid.cases$date == "2021-01-06" | covid.cases$date == "2021-01-05")
+#get rid of Guam, Northern Marina Islands, Puerto Rico, Virgin Islands
+covid.cases.22 <- subset(covid.cases.22, covid.cases.22$state != "Guam" & covid.cases.22$state !="Northern Mariana Islands" & covid.cases.22$state != "Puerto Rico" & covid.cases.22$state != "Virgin Islands")
+#create a vector object (with 51 values) for the difference in cases and difference in deaths 
+new.cases.22 <- covid.cases.22$cases[covid.cases.22$date == "2021-01-06"] - covid.cases.22$cases[covid.cases.22$date == "2021-01-05"]
+new.deaths.22 <- covid.cases.22$deaths[covid.cases.22$date == "2021-01-06"] - covid.cases.22$deaths[covid.cases.22$date == "2021-01-05"]
+
+#now add these two vectors to the state.policy.22 dataframe
+statepolicy.22$new.cases <- new.cases.22
+statepolicy.22$new.deaths <- new.deaths.22
+
+#now merge the state level dataframe with the survey data
+week.22 <- merge(survey.data.22, statepolicy.22, by = "state")
+```
+
+week 23: 
+```{r}
+#the dataset from the surveys and remember to repeat this code for all data from 8 time points
+survey.data.23 <- read.csv("HPS PUF/HPS_Week23_PUF_CSV/pulse2021_puf_23.csv")
+#create a variable for respondents' age
+survey.data.23$age <- 2021-survey.data.23$TBIRTH_YEAR
+
+#we select the variables we care about 
+survey.data.23 <- survey.data.23[vars]
+```
+
+now add the policy stringency measures to the week 23 survey data (2021 jan 20 - feb 1)
+```{r}
+#first, rename survey data's state names into actual state names for further coding convenience 
+survey.data.23$state <- survey.data.23$EST_ST
+survey.data.23$state[survey.data.23$state == 1] <- "Alabama"
+survey.data.23$state[survey.data.23$state == 2] <- "Alaska"
+survey.data.23$state[survey.data.23$state == 4] <- "Arizona"
+survey.data.23$state[survey.data.23$state == 5] <- "Arkansas"
+survey.data.23$state[survey.data.23$state == 6] <- "California"
+survey.data.23$state[survey.data.23$state == 8] <- "Colorado"
+survey.data.23$state[survey.data.23$state == 9] <- "Connecticut"
+survey.data.23$state[survey.data.23$state == 10] <- "Delaware"
+survey.data.23$state[survey.data.23$state == 11] <- "Washington DC"
+survey.data.23$state[survey.data.23$state == 12] <- "Florida"
+survey.data.23$state[survey.data.23$state == 13] <- "Georgia"
+survey.data.23$state[survey.data.23$state == 15] <- "Hawaii"
+survey.data.23$state[survey.data.23$state == 16] <- "Idaho"
+survey.data.23$state[survey.data.23$state == 17] <- "Illinois"
+survey.data.23$state[survey.data.23$state == 18] <- "Indiana"
+survey.data.23$state[survey.data.23$state == 19] <- "Iowa"
+survey.data.23$state[survey.data.23$state == 20] <- "Kansas"
+survey.data.23$state[survey.data.23$state == 21] <- "Kentucky"
+survey.data.23$state[survey.data.23$state == 22] <- "Louisiana"
+survey.data.23$state[survey.data.23$state == 23] <- "Maine"
+survey.data.23$state[survey.data.23$state == 24] <- "Maryland"
+survey.data.23$state[survey.data.23$state == 25] <- "Massachusetts"
+survey.data.23$state[survey.data.23$state == 26] <- "Michigan"
+survey.data.23$state[survey.data.23$state == 27] <- "Minnesota"
+survey.data.23$state[survey.data.23$state == 28] <- "Mississippi"
+survey.data.23$state[survey.data.23$state == 29] <- "Missouri"
+survey.data.23$state[survey.data.23$state == 30] <- "Montana"
+survey.data.23$state[survey.data.23$state == 31] <- "Nebraska"
+survey.data.23$state[survey.data.23$state == 32] <- "Nevada"
+survey.data.23$state[survey.data.23$state == 33] <- "New Hampshire"
+survey.data.23$state[survey.data.23$state == 34] <- "New Jersey"
+survey.data.23$state[survey.data.23$state == 35] <- "New Mexico"
+survey.data.23$state[survey.data.23$state == 36] <- "New York"
+survey.data.23$state[survey.data.23$state == 37] <- "North Carolina"
+survey.data.23$state[survey.data.23$state == 38] <- "North Dakota"
+survey.data.23$state[survey.data.23$state == 39] <- "Ohio"
+survey.data.23$state[survey.data.23$state == 40] <- "Oklahoma"
+survey.data.23$state[survey.data.23$state == 41] <- "Oregon"
+survey.data.23$state[survey.data.23$state == 42] <- "Pennsylvania"
+survey.data.23$state[survey.data.23$state == 44] <- "Rhode Island"
+survey.data.23$state[survey.data.23$state == 45] <- "South Carolina"
+survey.data.23$state[survey.data.23$state == 46] <- "South Dakota"
+survey.data.23$state[survey.data.23$state == 47] <- "Tennessee"
+survey.data.23$state[survey.data.23$state == 48] <- "Texas"
+survey.data.23$state[survey.data.23$state == 49] <- "Utah"
+survey.data.23$state[survey.data.23$state == 50] <- "Vermont"
+survey.data.23$state[survey.data.23$state == 51] <- "Virginia"
+survey.data.23$state[survey.data.23$state == 53] <- "Washington"
+survey.data.23$state[survey.data.23$state == 54] <- "West Virginia"
+survey.data.23$state[survey.data.23$state == 55] <- "Wisconsin"
+survey.data.23$state[survey.data.23$state == 56] <- "Wyoming"
+
+#now find the measures for each state, C1, C2, C4, and C6 on Jan 20 2021, the start date when the surveys are being distributed
+statepolicy.23 <- subset(state.measures, state.measures$Date == 20210120)
+statepolicy.23 <- statepolicy.23[c(-1,-2,-4,-5)]
+
+#now add the new covid cases and deaths on the beginning of the survey period, 20 Jan 2021
+covid.cases.23 <- subset(covid.cases, covid.cases$date == "2021-01-20" | covid.cases$date == "2021-01-19")
+#get rid of Guam, Northern Marina Islands, Puerto Rico, Virgin Islands
+covid.cases.23 <- subset(covid.cases.23, covid.cases.23$state != "Guam" & covid.cases.23$state !="Northern Mariana Islands" & covid.cases.23$state != "Puerto Rico" & covid.cases.23$state != "Virgin Islands")
+#create a vector object (with 51 values) for the difference in cases and difference in deaths 
+new.cases.23 <- covid.cases.23$cases[covid.cases.23$date == "2021-01-20"] - covid.cases.23$cases[covid.cases.23$date == "2021-01-19"]
+new.deaths.23 <- covid.cases.23$deaths[covid.cases.23$date == "2021-01-20"] - covid.cases.23$deaths[covid.cases.23$date == "2021-01-19"]
+
+#now add these two vectors to the state.policy.23 dataframe
+statepolicy.23$new.cases <- new.cases.23
+statepolicy.23$new.deaths <- new.deaths.23
+
+#now merge the state level dataframe with the survey data
+week.23 <- merge(survey.data.23, statepolicy.23, by = "state")
+```
+
+week 24:
+```{r}
+#the dataset from the surveys and remember to repeat this code for all data from 8 time points
+survey.data.24 <- read.csv("HPS PUF/HPS_Week24_PUF_CSV/pulse2021_puf_24.csv")
+#create a variable for respondents' age
+survey.data.24$age <- 2021-survey.data.24$TBIRTH_YEAR
+
+#we select the variables we care about 
+survey.data.24 <- survey.data.24[vars]
+```
+
+now add the policy stringency measures to the week 24 survey data (February 3 – February 15)
+```{r}
+#first, rename survey data's state names into actual state names for further coding convenience 
+survey.data.24$state <- survey.data.24$EST_ST
+survey.data.24$state[survey.data.24$state == 1] <- "Alabama"
+survey.data.24$state[survey.data.24$state == 2] <- "Alaska"
+survey.data.24$state[survey.data.24$state == 4] <- "Arizona"
+survey.data.24$state[survey.data.24$state == 5] <- "Arkansas"
+survey.data.24$state[survey.data.24$state == 6] <- "California"
+survey.data.24$state[survey.data.24$state == 8] <- "Colorado"
+survey.data.24$state[survey.data.24$state == 9] <- "Connecticut"
+survey.data.24$state[survey.data.24$state == 10] <- "Delaware"
+survey.data.24$state[survey.data.24$state == 11] <- "Washington DC"
+survey.data.24$state[survey.data.24$state == 12] <- "Florida"
+survey.data.24$state[survey.data.24$state == 13] <- "Georgia"
+survey.data.24$state[survey.data.24$state == 15] <- "Hawaii"
+survey.data.24$state[survey.data.24$state == 16] <- "Idaho"
+survey.data.24$state[survey.data.24$state == 17] <- "Illinois"
+survey.data.24$state[survey.data.24$state == 18] <- "Indiana"
+survey.data.24$state[survey.data.24$state == 19] <- "Iowa"
+survey.data.24$state[survey.data.24$state == 20] <- "Kansas"
+survey.data.24$state[survey.data.24$state == 21] <- "Kentucky"
+survey.data.24$state[survey.data.24$state == 22] <- "Louisiana"
+survey.data.24$state[survey.data.24$state == 23] <- "Maine"
+survey.data.24$state[survey.data.24$state == 24] <- "Maryland"
+survey.data.24$state[survey.data.24$state == 25] <- "Massachusetts"
+survey.data.24$state[survey.data.24$state == 26] <- "Michigan"
+survey.data.24$state[survey.data.24$state == 27] <- "Minnesota"
+survey.data.24$state[survey.data.24$state == 28] <- "Mississippi"
+survey.data.24$state[survey.data.24$state == 29] <- "Missouri"
+survey.data.24$state[survey.data.24$state == 30] <- "Montana"
+survey.data.24$state[survey.data.24$state == 31] <- "Nebraska"
+survey.data.24$state[survey.data.24$state == 32] <- "Nevada"
+survey.data.24$state[survey.data.24$state == 33] <- "New Hampshire"
+survey.data.24$state[survey.data.24$state == 34] <- "New Jersey"
+survey.data.24$state[survey.data.24$state == 35] <- "New Mexico"
+survey.data.24$state[survey.data.24$state == 36] <- "New York"
+survey.data.24$state[survey.data.24$state == 37] <- "North Carolina"
+survey.data.24$state[survey.data.24$state == 38] <- "North Dakota"
+survey.data.24$state[survey.data.24$state == 39] <- "Ohio"
+survey.data.24$state[survey.data.24$state == 40] <- "Oklahoma"
+survey.data.24$state[survey.data.24$state == 41] <- "Oregon"
+survey.data.24$state[survey.data.24$state == 42] <- "Pennsylvania"
+survey.data.24$state[survey.data.24$state == 44] <- "Rhode Island"
+survey.data.24$state[survey.data.24$state == 45] <- "South Carolina"
+survey.data.24$state[survey.data.24$state == 46] <- "South Dakota"
+survey.data.24$state[survey.data.24$state == 47] <- "Tennessee"
+survey.data.24$state[survey.data.24$state == 48] <- "Texas"
+survey.data.24$state[survey.data.24$state == 49] <- "Utah"
+survey.data.24$state[survey.data.24$state == 50] <- "Vermont"
+survey.data.24$state[survey.data.24$state == 51] <- "Virginia"
+survey.data.24$state[survey.data.24$state == 53] <- "Washington"
+survey.data.24$state[survey.data.24$state == 54] <- "West Virginia"
+survey.data.24$state[survey.data.24$state == 55] <- "Wisconsin"
+survey.data.24$state[survey.data.24$state == 56] <- "Wyoming"
+
+#February 3 – February 15
+#now find the measures for each state, C1, C2, C4, and C6 on Feb 03 2021, the start date when the surveys are being distributed
+statepolicy.24 <- subset(state.measures, state.measures$Date == 20210203)
+statepolicy.24 <- statepolicy.24[c(-1,-2,-4,-5)]
+
+#now add the new covid cases and deaths on the beginning of the survey period, 03 Feb 2021
+covid.cases.24 <- subset(covid.cases, covid.cases$date == "2021-02-02" | covid.cases$date == "2021-02-03")
+#get rid of Guam, Northern Marina Islands, Puerto Rico, Virgin Islands
+covid.cases.24 <- subset(covid.cases.24, covid.cases.24$state != "Guam" & covid.cases.24$state !="Northern Mariana Islands" & covid.cases.24$state != "Puerto Rico" & covid.cases.24$state != "Virgin Islands")
+#create a vector object (with 51 values) for the difference in cases and difference in deaths 
+new.cases.24 <- covid.cases.24$cases[covid.cases.24$date == "2021-02-03"] - covid.cases.24$cases[covid.cases.24$date == "2021-02-02"]
+new.deaths.24 <- covid.cases.24$deaths[covid.cases.24$date == "2021-02-03"] - covid.cases.24$deaths[covid.cases.24$date == "2021-02-02"]
+
+#now add these two vectors to the state.policy.18 dataframe
+statepolicy.24$new.cases <- new.cases.24
+statepolicy.24$new.deaths <- new.deaths.24
+
+#now merge the state level dataframe with the survey data
+week.24 <- merge(survey.data.24, statepolicy.24, by = "state")
+```
+
+now make a megadata by combining all the rows
+```{r}
+df <- rbind(week.18, week.19, week.20, week.21, week.22, week.23, week.24)
+#wanting to check if it is in the truest sence, RCS data (if there are repeated ID observations)
+dataframe <- as.data.frame(table(df$SCRAM)) #there are no repeated observations, this is a true RCS data
+table(df$Freq)
+rm(dataframe)
+```
+
+do some more data cleaning for the final swb file 
+```{r}
+#change all the colnumn names for the df file 
+colnames(df)
+colnames(df)[3] <- "period"
+colnames(df)[5] <- "depression"
+colnames(df)[6] <- "anxiety"
+colnames(df)[7] <- "income"
+colnames(df)[8] <- "employment"
+colnames(df)[9] <- "education"
+colnames(df)[10] <- "hispanic"
+colnames(df)[11] <- "race"
+colnames(df)[12] <- "gender"
+colnames(df)[15] <- "WFH"
+colnames(df)[16] <- "child"
+colnames(df)[18] <- "SC"
+colnames(df)[19] <- "BC"
+colnames(df)[20] <- "SAH"
+
+#the distribution of education in the data is heavily skewed to people with bachelor's degree, so make it into a dummy variable indicating whether the person has taken college courses or not
+df$education[df$education <= 5] <- 0
+df$education[df$education >5] <- 1
+
+#make the period as time points that start from period 1 to period 7
+df$period[df$period == "18"] <- 1
+df$period[df$period == "19"] <- 2
+df$period[df$period == "20"] <- 3
+df$period[df$period == "21"] <- 4
+df$period[df$period == "22"] <- 5
+df$period[df$period == "23"] <- 6
+df$period[df$period == "24"] <- 7
+
+#re-scaling the policy variables for the study's analysis
+df$BC[df$BC == 2] <- 3
+df$BC[df$BC == 1] <- 2
+df$BC[df$BC == 0] <- 1
+
+df$SAH[df$SAH == 2] <- 3
+df$SAH[df$SAH == 1] <- 2
+df$SAH[df$SAH == 0] <- 1
+
+#re-scale the income variable
+df$income[df$income == 2] <- 1
+df$income[df$income == 3] <- 1
+df$income[df$income == 4] <- 2
+df$income[df$income == 5] <- 2
+df$income[df$income == 6] <- 2
+df$income[df$income == 7] <- 3
+df$income[df$income == 8] <- 3
+
+#sorting out the work from home and employment variables to fit the descriptions
+table(df$WFH)
+df$WFH[df$WFH == 3] <- 2
+df$WFH[df$WFH == 2] <- 0
+
+df$employment[df$employment == 2] <- 0
+
+#if number of children is above 0, then it is 1 (making it into a dummy)
+df$child[df$child > 0] <- 1
+```
+
+this is to create a state-level data for data descriptive analysis
+```{r}
+policy <- rbind(statepolicy.18,statepolicy.19,statepolicy.20,statepolicy.21, statepolicy.22, statepolicy.23, statepolicy.24)
+
+policy$period <- policy$Date
+policy$period[policy$Date == 20201028] <- 1
+policy$period[policy$Date == 20201111] <- 2
+policy$period[policy$Date == 20201125] <- 3
+policy$period[policy$Date == 20201209] <- 4
+policy$period[policy$Date == 20210106] <- 5
+policy$period[policy$Date == 20210120] <- 6
+policy$period[policy$Date == 20210203] <- 7
+
+policy$C2_Workplace.closing[policy$C2_Workplace.closing == 2] <- 3
+policy$C2_Workplace.closing[policy$C2_Workplace.closing == 1] <- 2
+policy$C2_Workplace.closing[policy$C2_Workplace.closing == 0] <- 1
+
+policy$C6_Stay.at.home.requirements[policy$C6_Stay.at.home.requirements == 2] <- 3
+policy$C6_Stay.at.home.requirements[policy$C6_Stay.at.home.requirements == 1] <- 2
+policy$C6_Stay.at.home.requirements[policy$C6_Stay.at.home.requirements == 0] <- 1
+
+#policy dataset will be the state level data 
+write.csv(policy, "policy.csv")
+```
+
+From now on, swb will be the dataset I will be working with.
+```{r}
+#exporting df into a CSV datafile 
+write.csv(df, "Analysis Data.csv") 
+```
+
+
+
+
+
+
+
+
+
+
+
+
+

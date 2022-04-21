@@ -1,0 +1,366 @@
+---
+title: "Analysis Code"
+output:
+  word_document: default
+  pdf_document: default
+---
+load the libraries needed
+```{r}
+library(ggplot2)
+library(ggpubr)
+library(scales)
+library(ggthemes)
+library(performance)
+library(lme4)
+library(ggcorrplot)
+```
+
+Load the data of interest for analysis
+```{r}
+df <- read.csv("Analysis Data.csv")
+df <- df[,-1]
+
+#make the variables into their correct format
+df$income <- as.factor(df$income)
+df$employment <- as.factor(df$employment)
+df$WFH <- as.factor(df$WFH)
+df$education <- as.factor(df$education)
+df$race <- as.factor(df$race)
+df$gender <- as.factor(df$gender)
+df$SC <- as.factor(df$SC)
+df$BC <- as.factor(df$BC)
+df$SAH <- as.factor(df$SAH)
+
+policy <- read.csv("policy.csv")
+policy <- policy[,-1]
+
+us <- read.csv("us.csv")
+#increase in cases each day is then written as 
+new.cases <- diff(us$cases)
+us$new.cases <- c(0, new.cases)
+```
+
+now create a plot for new cases each day in the US during the study period of 28th Oct 2020 to 1st Feb 2021
+```{r}
+#subset the us data to around 2020-10-28 to 2021-02-15
+us <- us[us$date > as.Date("2020-07-01"),]
+us <- us[us$date < as.Date("2021-07-01"),]
+
+g1 <- ggplot(us, aes(x= as.Date(date), y = new.cases)) + geom_bar(stat = "identity", fill="steelblue") + scale_x_date(date_breaks = "months" , date_labels = "%b-%y", name = "Date") + 
+    geom_vline(xintercept = as.Date(c("2020-10-28", "2021-02-15")), linetype=2, colour="black") + 
+    ylab("New Cases") + 
+    scale_y_continuous(limits = c(-24000,300800), labels = comma) + 
+    theme_classic() 
+g1
+
+ggsave("us new cases by date.pdf", plot = g1, width = 2500, height = 1400,
+  units = "px",)
+```
+
+Calculating the numbers of NAs in the df file
+```{r}
+#do some more data cleaning, making non-replies into NA
+df$depression[df$depression == "-99" | df$depression == "-88"] <- NA
+df$anxiety[df$anxiety == "-99" | df$anxiety == "-88"] <- NA
+df$income[df$income == "-99" | df$income == "-88"] <- NA
+df$employment[df$employment == "-99" | df$employment == "-88"] <- NA
+df$WFH[df$WFH == "-99" | df$WFH == "-88"] <- NA
+```
+
+calculate the ICC for HPS data
+```{r}
+m0 <- lmer(depression~(1|state),data=df) 
+m00 <- lmer(anxiety~(1|state),data=df) 
+icc(m00)
+icc(m0)
+```
+
+Inspecting multicollinearity in policies at the state level
+```{r}
+#the column names of policy data
+colnames(policy)[3] <- "School Closure"
+colnames(policy)[4] <- "Business Closure"
+colnames(policy)[5] <- "SAH Order"
+#a simple correlation matrix of the three independent variables 
+#correlation matrix stored in a matrix object
+corr <- round(cor(policy[,c(3,4,5)]), 3)
+head(corr)
+ggcorrplot(corr, hc.order = TRUE, type = "lower",
+   lab = TRUE, digits = 4, ggtheme = ggplot2::theme_classic())
+```
+
+modelling for the outcome of depression and anxiety for all respondents, SAH order and BUS
+```{r}
+m1.1 <- lm(depression ~ SAH + BC + income + gender + education + age + new.cases + race + new.deaths + period + BC*employment + BC*WFH, df)
+summary(m1.1)
+
+m1.2 <- lm(anxiety ~ SAH + BC + income + gender + education + age + new.cases + race + new.deaths + period + BC*employment + BC*WFH, df)
+summary(m1.2)
+
+m2.1 <- lm(depression ~ SAH*BC + income + gender + education + age + new.cases + race + new.deaths + period + employment + WFH, df)
+summary(m2.1)
+
+m2.2 <- lm(anxiety ~ SAH*BC + income + gender + education + age + new.cases + race + new.deaths + period + employment + WFH, df)
+summary(m2.2)
+
+```
+
+subset df into a data which only includes observations whose child is > 0, and conduct the same models as the above
+```{r}
+df_parents <- df[df$child == 1, ]
+
+m3.1 <- lm(depression ~ SAH + BC + SC + income + gender + education + age + new.cases + race + new.deaths + period + SC*employment + SC*WFH, df_parents)
+summary(m3.1)
+
+m3.2 <- lm(anxiety ~ SAH + BC + SC + income + gender + education + age + new.cases + race + new.deaths + period + SC*employment + SC*WFH, df_parents)
+summary(m3.2)
+
+m4.1 <- lm(depression ~ SAH*SC + BC + income + gender + education + age + new.cases + race + new.deaths + period + employment + WFH, df_parents)
+summary(m4.1)
+
+m4.2 <- lm(anxiety ~ SAH*SC + BC + income + gender + education + age + new.cases + race + new.deaths + period + employment + WFH, df_parents)
+summary(m4.2)
+
+```
+
+plot residual plots to see test if there's heteroskedasticity. This is for Model 1 and Model 2.
+```{r}
+complete_df <- na.omit(df)
+
+#residuals for Model 1
+complete_df$m1_res.dep <- resid(lm(depression ~ SAH + BC + income + gender + education + age + new.cases + race + new.deaths + period + BC*employment + BC*WFH, complete_df))
+
+complete_df$m1_res.anx <- resid(lm(anxiety ~ SAH + BC + income + gender + education + age + new.cases + race + new.deaths + period + BC*employment + BC*WFH, complete_df))
+
+p1 <- ggplot(complete_df,aes(x=SAH, y=m1_res.dep)) +
+  geom_boxplot() + 
+  labs(y="Model 1 Depression Residual", x="SAH") +
+  theme_clean() +
+  theme(plot.background = element_rect(fill = "transparent", color = NA))
+
+p2 <- ggplot(complete_df,aes(x=SAH, y=m1_res.anx)) +
+  geom_boxplot() + 
+  labs(y="Model 1 Anxiety Residual", x="SAH") +
+  theme_clean() +
+  theme(plot.background = element_rect(fill = "transparent", color = NA))
+
+p3 <- ggplot(complete_df,aes(x=BC, y=m1_res.dep)) +
+  geom_boxplot() + 
+  labs(y="Model 1 Depression Residual", x="BC") +
+  theme_clean() +
+  theme(plot.background = element_rect(fill = "transparent", color = NA))
+
+p4 <- ggplot(complete_df,aes(x=BC, y=m1_res.anx)) +
+  geom_boxplot() + 
+  labs(y="Model 1 Anxiety Residual", x="BC") +
+  theme_clean() +
+  theme(plot.background = element_rect(fill = "transparent", color = NA))
+
+#create a residual plot for Model 1
+ggarrange(p1, p3, p2, p4,
+          ncol = 2, nrow = 2)
+
+#residuals for Model 2
+complete_df$m2_res.dep <- resid(lm(depression ~ SAH*BC + income + gender + education + age + new.cases + race + new.deaths + period + employment + WFH, complete_df))
+
+complete_df$m2_res.anx <- resid(lm(anxiety ~ SAH*BC + income + gender + education + age + new.cases + race + new.deaths + period + employment + WFH, complete_df))
+
+p1 <- ggplot(complete_df,aes(x=SAH, y=m2_res.dep)) +
+  geom_boxplot() + 
+  labs(y="Model 2 Depression Residual", x="SAH") +
+  theme_clean() +
+  theme(plot.background = element_rect(fill = "transparent", color = NA))
+
+p2 <- ggplot(complete_df,aes(x=SAH, y=m2_res.anx)) +
+  geom_boxplot() + 
+  labs(y="Model 2 Anxiety Residual", x="SAH") +
+  theme_clean() +
+  theme(plot.background = element_rect(fill = "transparent", color = NA))
+
+p3 <- ggplot(complete_df,aes(x=BC, y=m2_res.dep)) +
+  geom_boxplot() + 
+  labs(y="Model 2 Depression Residual", x="BC") +
+  theme_clean() +
+  theme(plot.background = element_rect(fill = "transparent", color = NA))
+
+p4 <- ggplot(complete_df,aes(x=BC, y=m2_res.anx)) +
+  geom_boxplot() + 
+  labs(y="Model 2 Anxiety Residual", x="BC") +
+  theme_clean() +
+  theme(plot.background = element_rect(fill = "transparent", color = NA))
+
+#creating a residual plot for Model 2
+ggarrange(p1, p3, p2, p4,
+          ncol = 2, nrow = 2)
+```
+
+This is for Model 3 and Model 4.
+```{r}
+complete_df_parents <- na.omit(df_parents)
+
+#residuals for Model 3
+complete_df_parents$m3_res.dep <- resid(lm(depression ~ SAH + BC + SC + income + gender + education + age + new.cases + race + new.deaths + period + SC*employment + SC*WFH, complete_df_parents))
+
+complete_df_parents$m3_res.anx <- resid(lm(anxiety ~ SAH + BC + SC + income + gender + education + age + new.cases + race + new.deaths + period + SC*employment + SC*WFH, complete_df_parents))
+
+p5 <- ggplot(complete_df_parents,aes(x=SAH, y=m3_res.dep)) +
+  geom_boxplot() + 
+  labs(y="Model 3 Depression Residual", x="SAH") +
+  theme_clean() +
+  theme(plot.background = element_rect(fill = "transparent", color = NA))
+
+p6 <- ggplot(complete_df_parents,aes(x=SAH, y=m3_res.anx)) +
+  geom_boxplot() + 
+  labs(y="Model 3 Anxiety Residual", x="SAH") +
+  theme_clean() +
+  theme(plot.background = element_rect(fill = "transparent", color = NA))
+
+p7 <- ggplot(complete_df_parents,aes(x=BC, y=m3_res.dep)) +
+  geom_boxplot() + 
+  labs(y="Model 3 Depression Residual", x="BC") +
+  theme_clean() +
+  theme(plot.background = element_rect(fill = "transparent", color = NA))
+
+p8 <- ggplot(complete_df_parents,aes(x=BC, y=m3_res.anx)) +
+  geom_boxplot() + 
+  labs(y="Model 3 Anxiety Residual", x="BC") +
+  theme_clean() +
+  theme(plot.background = element_rect(fill = "transparent", color = NA))
+
+p9 <- ggplot(complete_df_parents,aes(x=SC, y=m3_res.dep)) +
+  geom_boxplot() + 
+  labs(y="Model 3 Depression Residual", x="SC") +
+  theme_clean() +
+  theme(plot.background = element_rect(fill = "transparent", color = NA))
+
+p10 <- ggplot(complete_df_parents,aes(x=SC, y=m3_res.anx)) +
+  geom_boxplot() + 
+  labs(y="Model 3 Anxiety Residual", x="SC") +
+  theme_clean() +
+  theme(plot.background = element_rect(fill = "transparent", color = NA))
+
+#the residual plot for Model 3
+ggarrange(p5, p7, p9, p6, p8, p10,
+          ncol = 3, nrow = 2)
+
+#residuals for Model 4 
+complete_df_parents$m4_res.dep <- resid(lm(depression ~ SAH*SC + BC + income + gender + education + age + new.cases + race + new.deaths + period + employment + WFH, complete_df_parents))
+
+complete_df_parents$m4_res.anx <- resid(lm(anxiety ~ SAH*SC + BC + income + gender + education + age + new.cases + race + new.deaths + period + employment + WFH, complete_df_parents))
+
+p5 <- ggplot(complete_df_parents,aes(x=SAH, y=m4_res.dep)) +
+  geom_boxplot() + 
+  labs(y="Model 4 Depression Residual", x="SAH") +
+  theme_clean() +
+  theme(plot.background = element_rect(fill = "transparent", color = NA))
+
+p6 <- ggplot(complete_df_parents,aes(x=SAH, y=m4_res.anx)) +
+  geom_boxplot() + 
+  labs(y="Model 4 Anxiety Residual", x="SAH") +
+  theme_clean() +
+  theme(plot.background = element_rect(fill = "transparent", color = NA))
+
+p7 <- ggplot(complete_df_parents,aes(x=BC, y=m4_res.dep)) +
+  geom_boxplot() + 
+  labs(y="Model 4 Depression Residual", x="BC") +
+  theme_clean() +
+  theme(plot.background = element_rect(fill = "transparent", color = NA))
+
+p8 <- ggplot(complete_df_parents,aes(x=BC, y=m4_res.anx)) +
+  geom_boxplot() + 
+  labs(y="Model 4 Anxiety Residual", x="BC") +
+  theme_clean() +
+  theme(plot.background = element_rect(fill = "transparent", color = NA))
+
+p9 <- ggplot(complete_df_parents,aes(x=SC, y=m4_res.dep)) +
+  geom_boxplot() + 
+  labs(y="Model 4 Depression Residual", x="SC") +
+  theme_clean() +
+  theme(plot.background = element_rect(fill = "transparent", color = NA))
+
+p10 <- ggplot(complete_df_parents,aes(x=SC, y=m4_res.anx)) +
+  geom_boxplot() + 
+  labs(y="Model 4 Anxiety Residual", x="SC") +
+  theme_clean() +
+  theme(plot.background = element_rect(fill = "transparent", color = NA))
+
+#residual plot for Model 4
+ggarrange(p5, p7, p9, p6, p8, p10,
+          ncol = 3, nrow = 2)
+
+```
+
+Data Table shown in Appendices:
+
+Descriptive Statistics for All Variables:
+```{r}
+#1 df's control variables
+table(df$depression)
+table(df$anxiety)
+table(df$SAH)
+table(df$BC)
+table(df$SC)
+table(df$income)
+table(df$gender)
+table(df$education)
+table(df$employment)
+table(df$WFH)
+table(df$race)
+
+#new cases from state levels
+mean(policy$new.cases[policy$week == 1])
+sd(policy$new.cases[policy$week == 1])
+
+mean(policy$new.cases[policy$week == 2])
+sd(policy$new.cases[policy$week == 2])
+
+mean(policy$new.cases[policy$week == 3])
+sd(policy$new.cases[policy$week == 3])
+
+mean(policy$new.cases[policy$week == 4])
+sd(policy$new.cases[policy$week == 4])
+
+mean(policy$new.cases[policy$week == 5])
+sd(policy$new.cases[policy$week == 5])
+
+mean(policy$new.cases[policy$week == 6])
+sd(policy$new.cases[policy$week == 6])
+
+mean(policy$new.cases[policy$week == 7])
+sd(policy$new.cases[policy$week == 7])
+
+mean(policy$new.deaths[policy$period == 1])
+sd(policy$new.deaths[policy$period == 1])
+
+mean(policy$new.deaths[policy$period == 2])
+sd(policy$new.deaths[policy$period == 2])
+
+mean(policy$new.deaths[policy$period == 3])
+sd(policy$new.deaths[policy$period == 3])
+
+mean(policy$new.deaths[policy$period == 4])
+sd(policy$new.deaths[policy$period == 4])
+
+mean(policy$new.deaths[policy$period == 5])
+sd(policy$new.deaths[policy$period == 5])
+
+mean(policy$new.deaths[policy$period == 6])
+sd(policy$new.deaths[policy$period == 6])
+
+mean(policy$new.deaths[policy$period == 7])
+sd(policy$new.deaths[policy$period == 7])
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
