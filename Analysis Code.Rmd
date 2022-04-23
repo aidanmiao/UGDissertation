@@ -59,7 +59,13 @@ ggsave("us new cases by date.pdf", plot = g1, width = 2500, height = 1400,
 
 Calculating the numbers of NAs in the df file
 ```{r}
-#do some more data cleaning, making non-replies into NA
+table(df$depression)
+table(df$anxiety)
+table(df$income)
+table(df$employment)
+table(df$WFH)
+
+#making non-replies into NA for later analysis
 df$depression[df$depression == "-99" | df$depression == "-88"] <- NA
 df$anxiety[df$anxiety == "-99" | df$anxiety == "-88"] <- NA
 df$income[df$income == "-99" | df$income == "-88"] <- NA
